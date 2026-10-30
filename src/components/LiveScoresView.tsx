@@ -33,7 +33,7 @@ const SPORTS_LIST: { name: SportType; icon: string }[] = [
 export const LiveScoresView: React.FC = () => {
   const [matches, setMatches] = useState<SportsMatch[]>([]);
   const [selectedSport, setSelectedSport] = useState<SportType>("All");
-  const [selectedStatus, setSelectedStatus] = useState<"ALL" | MatchStatus>("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<"ALL" | MatchStatus>("LIVE");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -94,8 +94,16 @@ export const LiveScoresView: React.FC = () => {
     });
   }, [matches, selectedSport, selectedStatus, searchQuery]);
 
-  // Live match count
-  const liveCount = useMemo(() => matches.filter((m) => m.status === "LIVE").length, [matches]);
+  // Current sport match subset
+  const currentSportMatches = useMemo(() => {
+    if (selectedSport === "All") return matches;
+    return matches.filter((m) => m.sport === selectedSport);
+  }, [matches, selectedSport]);
+
+  const liveCount = useMemo(() => currentSportMatches.filter((m) => m.status === "LIVE").length, [currentSportMatches]);
+  const upcomingCount = useMemo(() => currentSportMatches.filter((m) => m.status === "UPCOMING").length, [currentSportMatches]);
+  const recentCount = useMemo(() => currentSportMatches.filter((m) => m.status === "RECENT").length, [currentSportMatches]);
+  const allCount = currentSportMatches.length;
 
   // Pinned vs Regular
   const { pinnedList, regularList } = useMemo(() => {
@@ -222,10 +230,10 @@ export const LiveScoresView: React.FC = () => {
         {/* Status Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
           {[
-            { id: "ALL", label: "All Active" },
-            { id: "LIVE", label: "In-Play (Live)", isLive: true },
-            { id: "UPCOMING", label: "Scheduled (24h)" },
-            { id: "RECENT", label: "Results (12h)" },
+            { id: "LIVE", label: "In-Play", count: liveCount, isLive: true },
+            { id: "ALL", label: "All Active", count: allCount },
+            { id: "UPCOMING", label: "Scheduled (24h)", count: upcomingCount },
+            { id: "RECENT", label: "Results (12h)", count: recentCount },
           ].map((tab) => {
             const isSelected = selectedStatus === tab.id;
             return (
@@ -245,6 +253,15 @@ export const LiveScoresView: React.FC = () => {
                   </span>
                 )}
                 <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                    isSelected
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : "bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
             );
           })}
@@ -299,10 +316,36 @@ export const LiveScoresView: React.FC = () => {
         ) : (
           <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-12 text-center space-y-3">
             <AlertCircle className="mx-auto h-8 w-8 text-slate-500" />
-            <h3 className="font-bold text-slate-200">No matches found for current filter</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              No live or scheduled {selectedSport !== "All" ? selectedSport : ""} fixtures match your criteria right now. Check back shortly for upcoming game schedules.
+            <h3 className="font-bold text-slate-200">
+              {selectedStatus === "LIVE"
+                ? `No ${selectedSport !== "All" ? selectedSport : ""} matches in-play right now`
+                : "No matches found for current filter"}
+            </h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {selectedStatus === "LIVE"
+                ? "Matches will automatically appear here with pulsing green indicators once in-play."
+                : "No fixtures match your criteria right now. Check back shortly."}
             </p>
+            {selectedStatus === "LIVE" && upcomingCount > 0 && (
+              <div className="pt-2">
+                <button
+                  onClick={() => setSelectedStatus("UPCOMING")}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition cursor-pointer"
+                >
+                  View Scheduled Upcoming Matches ({upcomingCount})
+                </button>
+              </div>
+            )}
+            {selectedStatus !== "ALL" && (
+              <div className="pt-1">
+                <button
+                  onClick={() => setSelectedStatus("ALL")}
+                  className="text-xs text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Or view all {allCount} active matches
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

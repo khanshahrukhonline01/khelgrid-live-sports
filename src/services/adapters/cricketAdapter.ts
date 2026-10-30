@@ -1,138 +1,127 @@
 import type { SportsMatch } from "@/types";
 import { sourceRegistry } from "../SourceRegistry";
 
-export const VERIFIED_CRICKET_FIXTURES: SportsMatch[] = [
-  {
-    id: "cricket-ind-wi-2nd-t20i",
-    externalId: "bcci-t20-ind-wi-2",
-    sport: "Cricket",
-    status: "LIVE",
-    tournament: "West Indies Tour of India 2026",
-    stage: "2nd T20I · JSCA Stadium, Ranchi",
-    teamA: {
-      name: "India",
-      code: "IND",
-      score: "164/4 (17.3 ov)",
-      flag: "🇮🇳",
-    },
-    teamB: {
-      name: "West Indies",
-      code: "WI",
-      score: "Yet to bat",
-      flag: "🌴",
-    },
-    highlight: "Hardik Pandya and Tilak Varma accelerating in the death overs under lights",
-    matchClock: "17.3 ov",
-    venue: "JSCA International Stadium Complex, Ranchi",
-    scheduledAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-    lastUpdated: new Date().toISOString(),
-    sourceId: "official_public_notice",
-    sourceName: "BCCI Official Match Center",
-    attributionText: "Official BCCI Match Circular & International Syndication",
-    displayAllowed: true,
-    redistributeAllowed: true,
-  },
-  {
-    id: "cricket-sa-aus-1st-test",
-    externalId: "csa-sa-aus-1st-test",
-    sport: "Cricket",
-    status: "LIVE",
-    tournament: "Australia Tour of South Africa 2026",
-    stage: "1st Test · Day 3 · Session 2",
-    teamA: {
-      name: "South Africa",
-      code: "SA",
-      score: "318 & 142/3",
-      flag: "🇿🇦",
-    },
-    teamB: {
-      name: "Australia",
-      code: "AUS",
-      score: "289",
-      flag: "🇦🇺",
-    },
-    highlight: "South Africa lead by 171 runs · Kagiso Rabada 5-for dismantled visitors",
-    matchClock: "Day 3, Session 2",
-    venue: "SuperSport Park, Centurion",
-    scheduledAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-    lastUpdated: new Date().toISOString(),
-    sourceId: "official_public_notice",
-    sourceName: "Cricket South Africa Official Notice",
-    attributionText: "Official Tour Program & CSA Media Advisory",
-    displayAllowed: true,
-    redistributeAllowed: true,
-  },
-  {
-    id: "cricket-wpl-mi-rcb",
-    externalId: "wpl-2026-match-12",
-    sport: "Cricket",
-    status: "UPCOMING",
-    tournament: "Women's Premier League (WPL 2026)",
-    stage: "Match 12 · Starts 7:30 PM IST",
-    teamA: {
-      name: "Mumbai Indians Women",
-      code: "MI-W",
-      score: "Scheduled",
-      flag: "🏏",
-    },
-    teamB: {
-      name: "Royal Challengers Bengaluru Women",
-      code: "RCB-W",
-      score: "Scheduled",
-      flag: "🏏",
-    },
-    highlight: "Defending champions take on table toppers at DY Patil Stadium",
-    matchClock: "7:30 PM IST",
-    venue: "DY Patil Stadium, Navi Mumbai",
-    scheduledAt: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
-    lastUpdated: new Date().toISOString(),
-    sourceId: "official_public_notice",
-    sourceName: "WPL Official Tournament Schedule",
-    attributionText: "BCCI Women's Premier League Official Fixtures",
-    displayAllowed: true,
-    redistributeAllowed: true,
-  },
-  {
-    id: "cricket-icc-cwc-league2",
-    externalId: "icc-cwc-league2-nep-nam",
-    sport: "Cricket",
-    status: "UPCOMING",
-    tournament: "ICC Men's Cricket World Cup League 2",
-    stage: "ODI Series · Starts Tomorrow 9:30 AM IST",
-    teamA: {
-      name: "Nepal",
-      code: "NEP",
-      score: "Scheduled",
-      flag: "🇳🇵",
-    },
-    teamB: {
-      name: "Namibia",
-      code: "NAM",
-      score: "Scheduled",
-      flag: "🇳🇦",
-    },
-    highlight: "Crucial pathway fixture for 2027 World Cup Qualification",
-    matchClock: "Starts Tomorrow",
-    venue: "TU Cricket Ground, Kirtipur",
-    scheduledAt: new Date(Date.now() + 20 * 3600 * 1000).toISOString(),
-    lastUpdated: new Date().toISOString(),
-    sourceId: "official_public_notice",
-    sourceName: "ICC World Cup Pathway Portal",
-    attributionText: "ICC Media & Governance Portal",
-    displayAllowed: true,
-    redistributeAllowed: true,
-  },
-];
+const CRICKET_FEED_URL = "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?sport=cricket";
 
-export async function fetchCricketMatches(): Promise<SportsMatch[]> {
-  const source = sourceRegistry.getSource("official_public_notice");
-  return VERIFIED_CRICKET_FIXTURES.map((m) => ({
-    ...m,
-    lastUpdated: new Date().toISOString(),
-    sourceId: source.id,
-    sourceName: source.name,
-    attributionText: source.attributionText,
-    displayAllowed: source.displayAllowed,
-    redistributeAllowed: source.redistributeAllowed,
-  }));
+/**
+ * Real Live Cricket Adapter
+ *
+ * Ingests 100% authentic live cricket matches from the international public scoreboard.
+ * Never fabricates or invents fake scores.
+ * Accurately classifies matches into LIVE (in-play), RECENT (concluded today), and UPCOMING (scheduled).
+ */
+export async function fetchCricketMatches(timeoutMs = 6000): Promise<SportsMatch[]> {
+  const matches: SportsMatch[] = [];
+  const source = sourceRegistry.getSource("cricketdata");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(CRICKET_FEED_URL, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      console.warn(`[CricketAdapter] Feed returned HTTP ${res.status}`);
+      return [];
+    }
+
+    const json = await res.json();
+    const sports = json.sports || [];
+
+    for (const sportObj of sports) {
+      for (const league of sportObj.leagues || []) {
+        const leagueName = league.name || "International Cricket";
+
+        for (const ev of league.events || []) {
+          const comps = ev.competitors || [];
+          if (comps.length < 2) continue;
+
+          const home = comps[0];
+          const away = comps[1];
+
+          const summaryLower = (ev.summary || "").toLowerCase();
+          const state = ev.status || ev.fullStatus?.type?.state;
+
+          let status: "LIVE" | "RECENT" | "UPCOMING" = "UPCOMING";
+          if (
+            state === "in" ||
+            summaryLower === "live" ||
+            summaryLower.includes("stumps") ||
+            summaryLower.includes("tea") ||
+            summaryLower.includes("lunch") ||
+            summaryLower.includes("innings break")
+          ) {
+            status = "LIVE";
+          } else if (
+            summaryLower.includes("won") ||
+            summaryLower.includes("result") ||
+            summaryLower.includes("tied") ||
+            summaryLower.includes("abandoned") ||
+            state === "post"
+          ) {
+            status = "RECENT";
+          }
+
+          const teamAName = home.displayName || home.name || "Team A";
+          const teamBName = away.displayName || away.name || "Team B";
+
+          const homeScore = home.score?.trim() || (status === "UPCOMING" ? "Scheduled" : "-");
+          const awayScore = away.score?.trim() || (status === "UPCOMING" ? "Scheduled" : "-");
+
+          const lastNote =
+            ev.notes && ev.notes.length > 0 ? ev.notes[ev.notes.length - 1].text : "";
+          const highlight =
+            ev.fullStatus?.longSummary ||
+            lastNote ||
+            `${teamAName} vs ${teamBName} · ${ev.location || leagueName}`;
+
+          const matchClock =
+            ev.summary ||
+            (status === "LIVE" ? "In Play" : status === "RECENT" ? "FT" : "Scheduled");
+
+          matches.push({
+            id: `cricket-${ev.id}`,
+            externalId: String(ev.id),
+            sport: "Cricket",
+            status,
+            tournament: leagueName,
+            stage: ev.description || ev.title || leagueName,
+            teamA: {
+              name: teamAName,
+              code: (home.abbreviation || teamAName.slice(0, 3)).toUpperCase(),
+              score: homeScore,
+              logo: home.logo,
+              flag: "🏏",
+            },
+            teamB: {
+              name: teamBName,
+              code: (away.abbreviation || teamBName.slice(0, 3)).toUpperCase(),
+              score: awayScore,
+              logo: away.logo,
+              flag: "🏏",
+            },
+            highlight,
+            matchClock,
+            venue: ev.location || undefined,
+            scheduledAt: ev.date || undefined,
+            lastUpdated: new Date().toISOString(),
+            sourceId: source.id,
+            sourceName: source.name,
+            attributionText: source.attributionText,
+            displayAllowed: source.displayAllowed,
+            redistributeAllowed: source.redistributeAllowed,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    console.error("[CricketAdapter] Failed to fetch live cricket feed:", err);
+  }
+
+  return matches;
 }

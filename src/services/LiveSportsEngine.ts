@@ -9,7 +9,7 @@ interface CacheStore {
   fetchedAt: number;
 }
 
-const CACHE_TTL_MS = 30 * 1000; // 30 seconds TTL
+const CACHE_TTL_MS = 15 * 1000; // 15 seconds TTL for rapid live updates
 
 /**
  * LiveSportsEngine

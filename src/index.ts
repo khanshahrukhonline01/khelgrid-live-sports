@@ -15,5 +15,9 @@ export { liveSportsEngine, LiveSportsEngine } from "./services/LiveSportsEngine"
 export { LifeCycleManager } from "./services/LifeCycleManager";
 export { sourceRegistry, LEGAL_SOURCES_REGISTRY } from "./services/SourceRegistry";
 
+// Utilities
+export { shareMatchOnWhatsApp, copyMatchScorecard, formatMatchScorecard } from "./utils/shareUtils";
+export { soundService } from "./utils/soundChime";
+
 // Types
 export * from "./types";
